@@ -1,23 +1,22 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>nasuta.pl — Wkrótce rusza</title>
-  <meta name="description" content="nasuta.pl — Strona w budowie. Wkrótce rusza." />
+  <title>nasuta.pl</title>
+  <meta name="description" content="nasuta.pl — Something is taking shape." />
   <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400&family=Outfit:wght@200;300;400&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0e14;
-      --terminal-bg: #0f141c;
-      --terminal-header: #161d28;
-      --border: #232d3d;
-      --text: #d9e0ee;
-      --muted: #6c7a96;
-      --accent: #39bae6;
-      --green: #7fd962;
-      --yellow: #ffb454;
-      --red: #ff5f56;
+      --bg: #040406;
+      --ink: #f0ede6;
+      --ink-dim: rgba(240, 237, 230, 0.45);
+      --ink-whisper: rgba(240, 237, 230, 0.22);
+      --amber: #df9b52;
+      --cyan: #64d2db;
     }
 
     * {
@@ -26,270 +25,486 @@
       padding: 0;
     }
 
-    body {
-      background-color: var(--bg);
-      background-image:
-        radial-gradient(circle at 50% 0%, rgba(57, 186, 230, 0.08), transparent 55%),
-        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-      background-size: 100% 100%, 32px 32px, 32px 32px;
-      color: var(--text);
-      font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem;
-      line-height: 1.65;
-    }
-
-    .terminal {
+    html, body {
       width: 100%;
-      max-width: 680px;
-      background: var(--terminal-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.03);
+      height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Outfit", -apple-system, BlinkMacSystemFont, sans-serif;
       overflow: hidden;
-    }
-
-    .terminal-header {
-      background: var(--terminal-header);
-      border-bottom: 1px solid var(--border);
-      padding: 0.75rem 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      -webkit-font-smoothing: antialiased;
       user-select: none;
     }
 
-    .window-controls {
+    /* Fullscreen interactive canvas */
+    canvas#scene {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Subtle film grain & vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 44%, transparent 35%, rgba(2, 2, 4, 0.85) 100%);
+    }
+
+    .grain {
+      position: fixed;
+      inset: -50%;
+      width: 200%;
+      height: 200%;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* Minimal HUD corners */
+    .hud {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      padding: clamp(1.5rem, 3.5vw, 2.75rem);
       display: flex;
-      gap: 8px;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
-    .dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-    }
-
-    .dot.red { background: var(--red); }
-    .dot.yellow { background: var(--yellow); }
-    .dot.green { background: var(--green); }
-
-    .terminal-title {
-      font-size: 0.8rem;
-      color: var(--muted);
-      letter-spacing: 0.03em;
-    }
-
-    .terminal-spacer {
-      width: 52px;
-    }
-
-    .terminal-body {
-      padding: 1.75rem 1.75rem 2rem;
-      font-size: 0.95rem;
-    }
-
-    .line {
-      margin-bottom: 0.65rem;
-      word-break: break-word;
-    }
-
-    .prompt-user {
-      color: var(--green);
-      font-weight: 600;
-    }
-
-    .prompt-host {
-      color: var(--accent);
-      font-weight: 600;
-    }
-
-    .prompt-path {
-      color: var(--yellow);
-    }
-
-    .cmd {
-      color: var(--text);
-    }
-
-    .output {
-      margin: 1rem 0 1.4rem;
-      padding-left: 1rem;
-      border-left: 2px solid var(--border);
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 0.15rem 0.55rem;
-      border-radius: 4px;
-      font-size: 0.78rem;
-      font-weight: 600;
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      background: rgba(255, 180, 84, 0.12);
-      color: var(--yellow);
-      border: 1px solid rgba(255, 180, 84, 0.3);
-      margin-bottom: 0.75rem;
+      color: var(--ink-dim);
+      font-weight: 300;
     }
 
-    h1 {
-      font-size: 1.45rem;
-      font-weight: 700;
-      color: #ffffff;
-      margin-bottom: 0.35rem;
-      letter-spacing: -0.02em;
+    .brand {
+      color: var(--ink);
+      letter-spacing: 0.34em;
+      font-weight: 400;
     }
 
-    .subtitle {
-      color: var(--muted);
-      font-size: 0.92rem;
-      margin-bottom: 1rem;
+    .code-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      color: var(--ink-dim);
     }
 
-    .meta-grid {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      gap: 0.35rem 1rem;
-      font-size: 0.88rem;
-      margin-top: 0.75rem;
-    }
-
-    .meta-key {
-      color: var(--muted);
-    }
-
-    .meta-val {
-      color: var(--text);
-    }
-
-    .meta-val.accent {
-      color: var(--accent);
-    }
-
-    .meta-val.green {
-      color: var(--green);
-    }
-
-    .progress-row {
-      margin-top: 1rem;
-      color: var(--accent);
-      font-size: 0.85rem;
-    }
-
-    .cursor {
-      display: inline-block;
-      width: 9px;
-      height: 1.15em;
-      background: var(--accent);
-      vertical-align: text-bottom;
-      margin-left: 4px;
-      animation: blink 1.05s steps(1) infinite;
+    .pulse-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 10px var(--amber);
+      animation: blink 3.2s ease-in-out infinite;
     }
 
     @keyframes blink {
-      0%, 49% { opacity: 1; }
-      50%, 100% { opacity: 0; }
+      0%, 100% { opacity: 0.25; }
+      50% { opacity: 1; }
     }
 
-    @media (max-width: 480px) {
-      .terminal-body {
-        padding: 1.25rem;
-        font-size: 0.85rem;
+    /* Clean architectural typography positioned below the central sculpture & strings */
+    .title-block {
+      position: fixed;
+      left: 50%;
+      bottom: clamp(4.75rem, 11vh, 7.5rem);
+      transform: translateX(-50%);
+      z-index: 3;
+      pointer-events: none;
+      text-align: center;
+      width: max-content;
+      max-width: 92vw;
+      padding: 1rem 2rem;
+      background: radial-gradient(ellipse at center, rgba(4, 4, 6, 0.78) 0%, rgba(4, 4, 6, 0) 75%);
+    }
+
+    .whisper-top {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: var(--amber);
+      opacity: 0;
+      margin-bottom: 0.85rem;
+      animation: fadeUp 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+    }
+
+    h1 {
+      font-family: "Outfit", sans-serif;
+      font-weight: 200;
+      font-size: clamp(1.35rem, 3.1vw, 2.45rem);
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--ink);
+      line-height: 1.3;
+      margin-right: -0.28em; /* optical balance for letter-spacing */
+      background: linear-gradient(90deg, rgba(240,237,230,0.7) 0%, #ffffff 50%, rgba(223,155,82,0.85) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      opacity: 0;
+      animation: fadeUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards;
+    }
+
+    .divider {
+      width: 48px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(223, 155, 82, 0.5), transparent);
+      margin: 1rem auto;
+      opacity: 0;
+      animation: fadeUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.65s forwards;
+    }
+
+    .riddle {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.64rem;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      font-weight: 300;
+      opacity: 0;
+      animation: fadeUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
+    }
+
+    .riddle span {
+      display: inline-block;
+      margin: 0 0.65rem;
+      color: var(--amber);
+      opacity: 0.6;
+    }
+
+    .telemetry {
+      font-variant-numeric: tabular-nums;
+      transition: color 0.3s ease;
+    }
+
+    .telemetry.active {
+      color: var(--amber);
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .hud-row {
+        font-size: 0.58rem;
+        letter-spacing: 0.14em;
       }
       h1 {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
+        letter-spacing: 0.18em;
+        margin-right: -0.18em;
+        white-space: normal;
       }
-      .terminal-spacer {
-        display: none;
+      .riddle {
+        font-size: 0.54rem;
+        letter-spacing: 0.16em;
+      }
+      .riddle span {
+        margin: 0 0.3rem;
       }
     }
   </style>
 </head>
 <body>
-  <main class="terminal" role="main" aria-label="Terminal status nasuta.pl">
-    <div class="terminal-header">
-      <div class="window-controls" aria-hidden="true">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
-      </div>
-      <div class="terminal-title">guest@nasuta.pl: ~</div>
-      <div class="terminal-spacer" aria-hidden="true"></div>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="title-block">
+    <p class="whisper-top">0x00 // Unannounced</p>
+    <h1>Something is taking shape</h1>
+    <div class="divider" aria-hidden="true"></div>
+    <p class="riddle">
+      Layer by layer<span>·</span>Note by note<span>·</span>Line by line
+    </p>
+  </div>
+
+  <div class="hud">
+    <div class="hud-row">
+      <span class="brand">nasuta.pl</span>
+      <span class="code-tag">
+        <span class="pulse-dot"></span>
+        <span id="stateReadout">&lt;state:materializing /&gt;</span>
+      </span>
     </div>
 
-    <div class="terminal-body">
-      <div class="line">
-        <span class="prompt-user">guest</span>@<span class="prompt-host">nasuta.pl</span>:<span class="prompt-path">~</span>$ <span class="cmd">./status.sh --domain nasuta.pl</span>
-      </div>
-
-      <div class="output">
-        <span class="badge">Build in progress</span>
-        <h1>Strona w budowie — wkrótce rusza</h1>
-        <p class="subtitle">Docelowa wersja serwisu jest aktualnie przygotowywana.</p>
-
-        <div class="meta-grid">
-          <span class="meta-key">domena:</span>
-          <span class="meta-val accent">nasuta.pl</span>
-
-          <span class="meta-key">status:</span>
-          <span class="meta-val green">● DEPLOYING_SOON</span>
-
-          <span class="meta-key">wersja:</span>
-          <span class="meta-val">0.1.0-temp</span>
-        </div>
-
-        <div class="progress-row" aria-hidden="true">
-          [████████████░░░░░░░░] 60% compiling assets...
-        </div>
-      </div>
-
-      <div class="line">
-        <span class="prompt-user">guest</span>@<span class="prompt-host">nasuta.pl</span>:<span class="prompt-path">~</span>$ <span class="cmd" id="typed-cmd"></span><span class="cursor" aria-hidden="true"></span>
-      </div>
+    <div class="hud-row">
+      <span class="telemetry" id="freqTelemetry">41.20 Hz · 55.00 Hz · 73.42 Hz · 98.00 Hz</span>
+      <span class="telemetry" id="layerTelemetry">Z: 0.20mm // 215°C</span>
     </div>
-  </main>
+  </div>
 
   <script>
     (function () {
-      const phrases = [
-        "echo 'Zapraszam wkrótce!'",
-        "git status --short",
-        "npm run build --production"
-      ];
-      const el = document.getElementById("typed-cmd");
-      let phraseIdx = 0;
-      let charIdx = 0;
-      let deleting = false;
+      const canvas = document.getElementById("scene");
+      const ctx = canvas.getContext("2d");
+      const freqTelemetry = document.getElementById("freqTelemetry");
+      const layerTelemetry = document.getElementById("layerTelemetry");
+      const stateReadout = document.getElementById("stateReadout");
 
-      function tick() {
-        const current = phrases[phraseIdx];
-        if (!deleting) {
-          charIdx++;
-          el.textContent = current.slice(0, charIdx);
-          if (charIdx === current.length) {
-            deleting = true;
-            setTimeout(tick, 2400);
-            return;
+      let w = 0;
+      let h = 0;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      function resize() {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      window.addEventListener("resize", resize);
+      resize();
+
+      // Subtle Web Audio deep bass harmonic on click/pluck
+      let audioCtx = null;
+      function playSubtleBassTone(freq) {
+        try {
+          if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            audioCtx = new AudioContext();
           }
-          setTimeout(tick, 65);
-        } else {
-          charIdx--;
-          el.textContent = current.slice(0, charIdx);
-          if (charIdx === 0) {
-            deleting = false;
-            phraseIdx = (phraseIdx + 1) % phrases.length;
-            setTimeout(tick, 500);
-            return;
+          if (audioCtx.state === "suspended") return;
+
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          const filter = audioCtx.createBiquadFilter();
+
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(freq, now);
+
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(freq * 3.5, now);
+          filter.frequency.exponentialRampToValueAtTime(freq * 1.2, now + 1.4);
+
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.linearRampToValueAtTime(0.08, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(now);
+          osc.stop(now + 1.85);
+        } catch (_) {}
+      }
+
+      window.addEventListener("pointerdown", function () {
+        if (!audioCtx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) audioCtx = new AudioContext();
+        } else if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+      }, { once: true });
+
+      // 4 horizontal strings centered around the 3D sculpture (above the title block so they never cross the text)
+      const strings = [
+        { hz: 98.00, label: "98.00 Hz [G2]", yFrac: 0.27, gauge: 0.85, amp: 0, vel: 0, phase: 0 },
+        { hz: 73.42, label: "73.42 Hz [D2]", yFrac: 0.37, gauge: 1.15, amp: 0, vel: 0, phase: 1.2 },
+        { hz: 55.00, label: "55.00 Hz [A1]", yFrac: 0.47, gauge: 1.55, amp: 0, vel: 0, phase: 2.4 },
+        { hz: 41.20, label: "41.20 Hz [E1]", yFrac: 0.57, gauge: 2.05, amp: 0, vel: 0, phase: 3.6 }
+      ];
+
+      let prevY = null;
+      let pointerX = w * 0.5;
+      let pointerY = h * 0.42;
+      let targetRotX = 0;
+      let targetRotY = 0;
+      let rotX = 0;
+      let rotY = 0;
+      let resonanceEnergy = 0;
+
+      setTimeout(function () {
+        strings[2].amp = 16;
+        resonanceEnergy = 0.55;
+      }, 800);
+
+      window.addEventListener("pointermove", function (e) {
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+
+        targetRotY = ((pointerX / w) - 0.5) * 0.65;
+        targetRotX = ((pointerY / h) - 0.42) * 0.45;
+
+        if (prevY !== null) {
+          strings.forEach(function (s) {
+            const sy = s.yFrac * h;
+            if ((prevY < sy && pointerY >= sy) || (prevY > sy && pointerY <= sy)) {
+              const speed = Math.min(Math.abs(pointerY - prevY), 36);
+              s.amp = (pointerY > prevY ? 1 : -1) * Math.max(12, speed * 1.2);
+              resonanceEnergy = Math.min(1.5, resonanceEnergy + 0.55);
+
+              playSubtleBassTone(s.hz);
+
+              if (freqTelemetry) {
+                freqTelemetry.textContent = "RESONANCE // " + s.label;
+                freqTelemetry.classList.add("active");
+                clearTimeout(freqTelemetry._timer);
+                freqTelemetry._timer = setTimeout(function () {
+                  freqTelemetry.classList.remove("active");
+                  freqTelemetry.textContent = "41.20 Hz · 55.00 Hz · 73.42 Hz · 98.00 Hz";
+                }, 1600);
+              }
+            }
+          });
+        }
+        prevY = pointerY;
+
+        if (layerTelemetry) {
+          const zVal = ((1 - pointerY / h) * 48.0).toFixed(2);
+          layerTelemetry.textContent = "Z: " + zVal + "mm // 215°C";
+        }
+      }, { passive: true });
+
+      let t = 0;
+
+      function drawSlicedArtifact() {
+        const numLayers = 28;
+        const cx = w * 0.5;
+        const cy = h * 0.42; // Lifted slightly so title block below has clean breathing room
+        const baseRadius = Math.min(w, h) * 0.21;
+
+        rotX += (targetRotX - rotX) * 0.05;
+        rotY += (targetRotY - rotY) * 0.05;
+        resonanceEnergy *= 0.96;
+
+        const activeLayerIdx = Math.floor((t * 0.08) % numLayers);
+
+        for (let i = 0; i < numLayers; i++) {
+          const norm = (i / (numLayers - 1)) * 2 - 1;
+          const sliceProfile = Math.sqrt(Math.max(0, 1 - norm * norm));
+          const layerZ = norm * baseRadius * 0.85;
+
+          const isCurrentSlice = i === activeLayerIdx;
+          const alpha = isCurrentSlice
+            ? 0.6
+            : (0.045 + sliceProfile * 0.14 + resonanceEnergy * 0.06);
+
+          ctx.beginPath();
+          const steps = 72;
+          for (let s = 0; s <= steps; s++) {
+            const angle = (s / steps) * Math.PI * 2;
+            const harmonicWave =
+              Math.sin(angle * 3 + t * 0.015 + norm * 2.2) * (9 + resonanceEnergy * 13) +
+              Math.cos(angle * 2 - t * 0.01) * 5;
+
+            const r = baseRadius * sliceProfile * 0.92 + harmonicWave * sliceProfile;
+
+            const x3d = Math.cos(angle) * r;
+            const y3d = Math.sin(angle) * r;
+            const z3d = layerZ;
+
+            const cosY = Math.cos(rotY + t * 0.003);
+            const sinY = Math.sin(rotY + t * 0.003);
+            const x1 = x3d * cosY - z3d * sinY;
+            const z1 = x3d * sinY + z3d * cosY;
+
+            const tilt = 0.58 + rotX * 0.5;
+            const projX = cx + x1;
+            const projY = cy + y3d * Math.sin(tilt) - z1 * Math.cos(tilt);
+
+            if (s === 0) ctx.moveTo(projX, projY);
+            else ctx.lineTo(projX, projY);
           }
-          setTimeout(tick, 30);
+
+          if (isCurrentSlice) {
+            ctx.strokeStyle = "rgba(223, 155, 82, " + alpha + ")";
+            ctx.lineWidth = 1.25;
+          } else {
+            ctx.strokeStyle = "rgba(100, 210, 219, " + alpha + ")";
+            ctx.lineWidth = 0.75;
+          }
+          ctx.stroke();
         }
       }
 
-      setTimeout(tick, 800);
+      function drawStrings() {
+        strings.forEach(function (s) {
+          const sy = s.yFrac * h;
+
+          const force = -0.22 * s.amp;
+          s.vel = (s.vel + force) * 0.92;
+          s.amp += s.vel;
+          s.phase += 0.38;
+
+          const energy = Math.min(Math.abs(s.amp) / 22, 1);
+
+          ctx.beginPath();
+          ctx.moveTo(0, sy);
+
+          const segments = 64;
+          for (let i = 1; i <= segments; i++) {
+            const u = i / segments;
+            const x = u * w;
+            const env = Math.sin(u * Math.PI);
+            const overtone = Math.sin(u * Math.PI * 3 + s.phase) * 0.16;
+            const dy = (env + overtone * env) * s.amp;
+            ctx.lineTo(x, sy + dy);
+          }
+
+          if (energy > 0.03) {
+            ctx.shadowColor = "rgba(223, 155, 82, 0.8)";
+            ctx.shadowBlur = 16 * energy;
+            ctx.strokeStyle = "rgba(223, 155, 82, " + (0.28 + energy * 0.7) + ")";
+          } else {
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = "rgba(240, 237, 230, 0.09)";
+          }
+
+          ctx.lineWidth = s.gauge;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        });
+      }
+
+      function tick() {
+        t += 1;
+        ctx.clearRect(0, 0, w, h);
+
+        drawSlicedArtifact();
+        drawStrings();
+
+        if (t % 240 === 0 && stateReadout) {
+          const states = [
+            "<state:materializing />",
+            "<layer:slicing />",
+            "<signal:resonant />"
+          ];
+          stateReadout.textContent = states[Math.floor(t / 240) % states.length];
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      tick();
     })();
   </script>
 </body>
