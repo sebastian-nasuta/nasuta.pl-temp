@@ -276,50 +276,119 @@
       window.addEventListener("resize", resize);
       resize();
 
-      // Subtle Web Audio deep bass harmonic on click/pluck
+      // Web Audio bass string synthesis (warm fundamental + harmonics audible on all speakers)
       let audioCtx = null;
-      function playSubtleBassTone(freq) {
+      let masterBus = null;
+
+      function ensureAudioContext() {
         try {
           if (!audioCtx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
+            if (!AudioContext) return null;
             audioCtx = new AudioContext();
+
+            const compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+            compressor.knee.setValueAtTime(12, audioCtx.currentTime);
+            compressor.ratio.setValueAtTime(4, audioCtx.currentTime);
+            compressor.attack.setValueAtTime(0.005, audioCtx.currentTime);
+            compressor.release.setValueAtTime(0.18, audioCtx.currentTime);
+            compressor.connect(audioCtx.destination);
+            masterBus = compressor;
           }
-          if (audioCtx.state === "suspended") return;
+          if (audioCtx.state === "suspended") {
+            audioCtx.resume().catch(function () {});
+          }
+          return audioCtx;
+        } catch (_) {
+          return null;
+        }
+      }
 
-          const now = audioCtx.currentTime;
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          const filter = audioCtx.createBiquadFilter();
+      function playSubtleBassTone(freq, velocity) {
+        try {
+          const ctxAudio = ensureAudioContext();
+          if (!ctxAudio || !masterBus) return;
 
-          osc.type = "triangle";
-          osc.frequency.setValueAtTime(freq, now);
+          const vel = Math.max(0.35, Math.min(1.0, velocity || 0.75));
 
-          filter.type = "lowpass";
-          filter.frequency.setValueAtTime(freq * 3.5, now);
-          filter.frequency.exponentialRampToValueAtTime(freq * 1.2, now + 1.4);
+          function triggerVoice() {
+            const now = ctxAudio.currentTime;
+            const duration = 2.4;
 
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.linearRampToValueAtTime(0.08, now + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+            // 1. Sub/Fundamental body (triangle)
+            const oscFund = ctxAudio.createOscillator();
+            oscFund.type = "triangle";
+            oscFund.frequency.setValueAtTime(freq * 1.008, now);
+            oscFund.frequency.exponentialRampToValueAtTime(freq, now + 0.045);
 
-          osc.connect(filter);
-          filter.connect(gain);
-          gain.connect(audioCtx.destination);
+            // 2. Warm string harmonics (sawtooth)
+            const oscHarm = ctxAudio.createOscillator();
+            oscHarm.type = "sawtooth";
+            oscHarm.frequency.setValueAtTime(freq, now);
+            oscHarm.detune.setValueAtTime(3.5, now);
 
-          osc.start(now);
-          osc.stop(now + 1.85);
+            // 3. Octave presence (2nd harmonic) so low E1/A1 cut through laptop/phone speakers
+            const oscOct = ctxAudio.createOscillator();
+            oscOct.type = "triangle";
+            oscOct.frequency.setValueAtTime(freq * 2, now);
+
+            const gainFund = ctxAudio.createGain();
+            const gainHarm = ctxAudio.createGain();
+            const gainOct = ctxAudio.createGain();
+
+            gainFund.gain.setValueAtTime(0.55, now);
+            gainHarm.gain.setValueAtTime(0.32, now);
+            gainOct.gain.setValueAtTime(0.22, now);
+
+            // Pluck lowpass filter envelope
+            const filter = ctxAudio.createBiquadFilter();
+            filter.type = "lowpass";
+            filter.Q.setValueAtTime(2.4, now);
+            const attackCutoff = Math.min(2800, Math.max(freq * 10, 620)) * (0.65 + 0.35 * vel);
+            filter.frequency.setValueAtTime(attackCutoff, now);
+            filter.frequency.exponentialRampToValueAtTime(freq * 3.2, now + 0.28);
+            filter.frequency.exponentialRampToValueAtTime(freq * 1.5, now + duration);
+
+            // Amplitude envelope
+            const voiceGain = ctxAudio.createGain();
+            const peakGain = 0.28 * vel;
+            voiceGain.gain.setValueAtTime(0.0001, now);
+            voiceGain.gain.linearRampToValueAtTime(peakGain, now + 0.01);
+            voiceGain.gain.exponentialRampToValueAtTime(peakGain * 0.42, now + 0.22);
+            voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+            oscFund.connect(gainFund);
+            oscHarm.connect(gainHarm);
+            oscOct.connect(gainOct);
+
+            gainFund.connect(filter);
+            gainHarm.connect(filter);
+            gainOct.connect(filter);
+
+            filter.connect(voiceGain);
+            voiceGain.connect(masterBus);
+
+            oscFund.start(now);
+            oscHarm.start(now);
+            oscOct.start(now);
+
+            oscFund.stop(now + duration + 0.05);
+            oscHarm.stop(now + duration + 0.05);
+            oscOct.stop(now + duration + 0.05);
+          }
+
+          if (ctxAudio.state === "running") {
+            triggerVoice();
+          } else {
+            ctxAudio.resume().then(triggerVoice).catch(function () {});
+          }
         } catch (_) {}
       }
 
-      window.addEventListener("pointerdown", function () {
-        if (!audioCtx) {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          if (AudioContext) audioCtx = new AudioContext();
-        } else if (audioCtx.state === "suspended") {
-          audioCtx.resume();
-        }
-      }, { once: true });
+      ["pointerdown", "touchstart", "keydown"].forEach(function (evt) {
+        window.addEventListener(evt, ensureAudioContext, { passive: true });
+      });
 
       // 4 foreground bass strings (G2, D2, A1, E1)
       const strings = [
@@ -375,41 +444,71 @@
         resonanceEnergy = 0.65;
       }, 800);
 
+      function pluckString(s, direction, speed) {
+        const bounds = getOriginAndTopY();
+        const spanH = Math.max(100, bounds.originY - bounds.topLimitY);
+        const sy = s.yFrac * h;
+        const clampedSpeed = Math.min(Math.max(speed || 20, 10), 38);
+
+        s.amp = (direction >= 0 ? 1 : -1) * Math.max(14, clampedSpeed * 1.25);
+        resonanceEnergy = Math.min(1.6, resonanceEnergy + 0.55);
+
+        // Excite lines near the plucked string's vertical position
+        const targetProg = Math.max(0, Math.min(1, (bounds.originY - sy) / spanH));
+        for (let k = 0; k < lines.length; k++) {
+          const dist = Math.abs(lines[k].progress - targetProg);
+          if (dist < 0.18) {
+            lines[k].boost = Math.min(1.6, lines[k].boost + (1 - dist / 0.18) * 0.85);
+          }
+        }
+
+        const normVel = Math.min(1.0, 0.45 + (clampedSpeed / 38) * 0.55);
+        playSubtleBassTone(s.hz, normVel);
+
+        if (freqTelemetry) {
+          freqTelemetry.textContent = "RESONANCE // " + s.label;
+          freqTelemetry.classList.add("active");
+          clearTimeout(freqTelemetry._timer);
+          freqTelemetry._timer = setTimeout(function () {
+            freqTelemetry.classList.remove("active");
+            freqTelemetry.textContent = "41.20 Hz · 55.00 Hz · 73.42 Hz · 98.00 Hz";
+          }, 1600);
+        }
+      }
+
+      window.addEventListener("pointerdown", function (e) {
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+        prevY = pointerY;
+
+        // Find nearest string and pluck it on click/tap
+        let closest = null;
+        let minDist = Infinity;
+        strings.forEach(function (s) {
+          const sy = s.yFrac * h;
+          const d = Math.abs(pointerY - sy);
+          if (d < minDist) {
+            minDist = d;
+            closest = s;
+          }
+        });
+
+        if (closest && minDist < h * 0.14) {
+          const sy = closest.yFrac * h;
+          pluckString(closest, pointerY >= sy ? 1 : -1, 24);
+        }
+      }, { passive: true });
+
       window.addEventListener("pointermove", function (e) {
         pointerX = e.clientX;
         pointerY = e.clientY;
 
         if (prevY !== null) {
-          const bounds = getOriginAndTopY();
-          const spanH = Math.max(100, bounds.originY - bounds.topLimitY);
-
           strings.forEach(function (s) {
             const sy = s.yFrac * h;
             if ((prevY < sy && pointerY >= sy) || (prevY > sy && pointerY <= sy)) {
               const speed = Math.min(Math.abs(pointerY - prevY), 38);
-              s.amp = (pointerY > prevY ? 1 : -1) * Math.max(14, speed * 1.25);
-              resonanceEnergy = Math.min(1.6, resonanceEnergy + 0.55);
-
-              // Excite lines near the plucked string's vertical position
-              const targetProg = Math.max(0, Math.min(1, (bounds.originY - sy) / spanH));
-              for (let k = 0; k < lines.length; k++) {
-                const dist = Math.abs(lines[k].progress - targetProg);
-                if (dist < 0.18) {
-                  lines[k].boost = Math.min(1.6, lines[k].boost + (1 - dist / 0.18) * 0.85);
-                }
-              }
-
-              playSubtleBassTone(s.hz);
-
-              if (freqTelemetry) {
-                freqTelemetry.textContent = "RESONANCE // " + s.label;
-                freqTelemetry.classList.add("active");
-                clearTimeout(freqTelemetry._timer);
-                freqTelemetry._timer = setTimeout(function () {
-                  freqTelemetry.classList.remove("active");
-                  freqTelemetry.textContent = "41.20 Hz · 55.00 Hz · 73.42 Hz · 98.00 Hz";
-                }, 1600);
-              }
+              pluckString(s, pointerY > prevY ? 1 : -1, speed);
             }
           });
         }
